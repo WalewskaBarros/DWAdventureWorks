@@ -120,6 +120,17 @@ sources:
         description: Países.
         columns:
           - name: countryregioncode
+            description: >
+              Código ISO do país. Problema conhecido de ingestão: o código da Namíbia ("NA")
+              é lido pelo pandas como valor ausente e chega nulo. O teste not_null fica como
+              alerta (warn) para registrar o problema na origem; a correção é feita em
+              stg_erp__paises, onde a chave é testada com unique e not_null.
+            data_tests:
+              - unique
+              - not_null:
+                  config:
+                    severity: warn
+          - name: name
             data_tests: [unique, not_null]
 
       - name: production_product
