@@ -2,6 +2,8 @@
 
 Projeto do **Desafio de Certificação Analytics Engineer** da Indicium Academy.
 
+**Painel interativo:** https://walewskabarros.github.io/DWAdventureWorks/
+
 A Adventure Works, fabricante de bicicletas, quer usar seus dados para tomar decisões comerciais.
 Este repositório contém a camada de transformação (dbt) do data warehouse de **vendas**: lê os dados
 brutos do ERP carregados no Databricks e entrega um esquema estrela documentado e testado para o
@@ -21,7 +23,7 @@ staging  (14 views: tipos, nomes e limpeza)
 marts    (8 tabelas: fato, dimensões e ponte)
       │
       ▼
-Power BI (painel interativo)
+Painel de BI em Plotly (HTML interativo publicado no GitHub Pages)
 ```
 
 | Camada | Ferramenta |
@@ -30,7 +32,7 @@ Power BI (painel interativo)
 | Armazenamento | Databricks (Unity Catalog, SQL warehouse serverless) |
 | Transformação | dbt platform (dbt Cloud) com `dbt-databricks` |
 | Versionamento | GitHub (este repositório) |
-| Visualização | Power BI |
+| Visualização | Plotly.js (HTML único) publicado no GitHub Pages |
 
 ## Modelagem (esquema estrela)
 
@@ -93,6 +95,28 @@ problema. Tratamento:
 | `dbt test --select "source:*"` | 44 testes: 43 PASS, 1 WARN (Namíbia), 0 erros |
 | `dbt test` | 92 testes: 91 PASS, 1 WARN (Namíbia), 0 erros |
 
+## Painel de BI
+
+O painel está publicado em **https://walewskabarros.github.io/DWAdventureWorks/** e também pode ser
+aberto localmente (`docs/index.html`), sem login e sem servidor.
+
+- Filtros globais: ano, período, produto, categoria, tipo de cartão, motivo de venda, status, cliente,
+  país, estado e cidade. Todos os indicadores, gráficos e tabelas respondem ao mesmo recorte.
+- Uma aba para cada pergunta de negócio (4a a 4f), mais visão geral e qualidade dos dados.
+- A aba **Qualidade dos dados** recalcula a venda bruta de 2011 e confere com a auditoria
+  ($12.646.112,16).
+
+O painel é gerado a partir dos marts pelo script `bi/gerar_painel.py`, que embute os dados
+(compactados) e o Plotly.js num único arquivo HTML:
+
+```bash
+pip install -r bi/requirements.txt
+export DATABRICKS_SERVER_HOSTNAME=...  DATABRICKS_HTTP_PATH=...  DATABRICKS_TOKEN=...
+python bi/gerar_painel.py --fonte databricks --catalogo fea_academy --schema prod_marts
+# ou, a partir de CSVs exportados dos marts:
+python bi/gerar_painel.py --fonte csv --pasta exportacao_marts/
+```
+
 ## Estrutura do repositório
 
 ```
@@ -106,8 +130,14 @@ problema. Tratamento:
 │   └── marts/               _marts.yml, fato, dimensões e ponte
 ├── tests/
 │   └── assert_vendas_brutas_2011.sql
-└── analyses/
-    └── resposta_4f_produto_promocao.sql
+├── analyses/
+│   └── resposta_4f_produto_promocao.sql
+├── bi/
+│   ├── gerar_painel.py      gera o painel a partir dos marts (Databricks ou CSV)
+│   ├── painel_template.html layout, filtros e gráficos do painel
+│   └── vendor/              Plotly.js (licença MIT)
+└── docs/
+    └── index.html           painel publicado no GitHub Pages
 ```
 
 ## Como executar
