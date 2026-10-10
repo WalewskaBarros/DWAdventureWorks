@@ -1,0 +1,218 @@
+version: 2
+
+models:
+  - name: fct_vendas
+    description: >
+      Fato de vendas da Adventure Works. Grão: um registro por item de pedido de venda
+      (produto dentro de um pedido). Contém as métricas de quantidade e valor usadas no painel.
+      Os motivos de venda ficam na tabela ponte brg_pedidos_motivos para não duplicar itens.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: source('erp_adventure_works', 'sales_salesorderdetail')
+    columns:
+      - name: sk_venda
+        description: Chave substituta (hash de id_pedido + id_item_pedido). Chave primária da fato.
+        data_tests: [unique, not_null]
+      - name: id_item_pedido
+        description: Identificador do item no sistema de origem (salesorderdetailid).
+      - name: fk_pedido
+        description: Identificador do pedido (salesorderid). Usado na contagem distinta de pedidos e para ligar a brg_pedidos_motivos.
+        data_tests: [not_null]
+      - name: numero_pedido
+        description: Número do pedido no formato do ERP (SO + id).
+      - name: fk_produto
+        description: Chave do produto vendido.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_produtos')
+                field: pk_produto
+      - name: fk_cliente
+        description: Chave do cliente que fez o pedido.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_clientes')
+                field: pk_cliente
+      - name: fk_localidade
+        description: Chave do endereço de entrega do pedido (cidade, estado e país).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_localidades')
+                field: pk_localidade
+      - name: fk_cartao
+        description: Chave do cartão de crédito do pedido; -1 quando o pedido não usou cartão.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_cartoes')
+                field: pk_cartao
+      - name: fk_data
+        description: Data do pedido (orderdate), chave para dim_datas.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_datas')
+                field: pk_data
+      - name: data_pedido
+        description: Data em que o pedido foi realizado.
+      - name: data_envio
+        description: Data em que o pedido foi enviado.
+      - name: status_pedido
+        description: Situação do pedido traduzida do código do ERP.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Em processamento', 'Aprovado', 'Em espera', 'Rejeitado', 'Enviado', 'Cancelado']
+      - name: is_pedido_online
+        description: Verdadeiro quando o pedido foi feito pelo site.
+      - name: motivos_venda
+        description: Motivos de venda do pedido concatenados (somente leitura; para filtrar use dim_motivos_venda).
+      - name: quantidade
+        description: Quantidade comprada (orderqty).
+        data_tests: [not_null]
+      - name: preco_unitario
+        description: Preço unitário praticado no item (unitprice).
+      - name: percentual_desconto
+        description: Percentual de desconto do item (unitpricediscount), entre 0 e 1.
+      - name: valor_bruto
+        description: Valor total negociado = preco_unitario * quantidade.
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: valor_desconto
+        description: Valor do desconto = preco_unitario * quantidade * percentual_desconto.
+      - name: valor_liquido
+        description: Valor total negociado líquido = preco_unitario * quantidade * (1 - percentual_desconto).
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= valor_bruto"
+
+  - name: dim_produtos
+    description: Dimensão de produtos com subcategoria e categoria.
+    columns:
+      - name: pk_produto
+        description: Chave do produto (productid).
+        data_tests: [unique, not_null]
+      - name: nome_produto
+        description: Nome do produto.
+      - name: codigo_produto
+        description: Código comercial do produto.
+      - name: cor
+        description: Cor do produto.
+      - name: subcategoria
+        description: Subcategoria do produto.
+      - name: categoria
+        description: Categoria do produto (Bikes, Components, Clothing, Accessories).
+      - name: custo_padrao
+        description: Custo padrão do produto.
+      - name: preco_lista
+        description: Preço de tabela do produto.
+
+  - name: dim_clientes
+    description: Dimensão de clientes. O nome vem da pessoa vinculada ao cliente e, na falta dela, do nome da loja.
+    columns:
+      - name: pk_cliente
+        description: Chave do cliente (customerid).
+        data_tests: [unique, not_null]
+      - name: nome_cliente
+        description: Nome do cliente (pessoa) ou da loja revendedora.
+        data_tests: [not_null]
+      - name: nome_loja
+        description: Nome da loja revendedora, quando houver.
+      - name: tipo_cliente
+        description: Pessoa física ou Loja revendedora.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Pessoa física', 'Loja revendedora']
+      - name: id_territorio
+        description: Território de vendas do cliente.
+
+  - name: dim_localidades
+    description: Dimensão geográfica (cidade, estado e país) no nível de endereço.
+    columns:
+      - name: pk_localidade
+        description: Chave do endereço (addressid).
+        data_tests: [unique, not_null]
+      - name: cidade
+        description: Cidade.
+      - name: estado
+        description: Estado ou província.
+      - name: sigla_estado
+        description: Sigla do estado ou província.
+      - name: pais
+        description: País.
+      - name: codigo_pais
+        description: Código ISO do país.
+      - name: codigo_postal
+        description: Código postal.
+
+  - name: dim_cartoes
+    description: Dimensão de cartões de crédito com o tipo de cartão. Inclui o membro -1 "Não informado".
+    columns:
+      - name: pk_cartao
+        description: Chave do cartão (creditcardid) ou -1.
+        data_tests: [unique, not_null]
+      - name: tipo_cartao
+        description: Bandeira / tipo do cartão.
+
+  - name: dim_motivos_venda
+    description: Dimensão de motivos de venda. Inclui o membro -1 "Não informado".
+    columns:
+      - name: pk_motivo_venda
+        description: Chave do motivo de venda (salesreasonid) ou -1.
+        data_tests: [unique, not_null]
+      - name: nome_motivo_venda
+        description: "Nome do motivo, por exemplo On Promotion, Price ou Manufacturer."
+      - name: tipo_motivo_venda
+        description: Agrupamento do motivo (Promotion, Marketing, Other).
+
+  - name: brg_pedidos_motivos
+    description: >
+      Tabela ponte pedido x motivo de venda. Liga dim_motivos_venda à fct_vendas pela coluna
+      fk_pedido. Todo pedido aparece ao menos uma vez (motivo -1 quando não há motivo registrado).
+    columns:
+      - name: sk_pedido_motivo
+        description: Chave substituta da combinação pedido + motivo.
+        data_tests: [unique, not_null]
+      - name: fk_pedido
+        description: Pedido (salesorderid).
+        data_tests: [not_null]
+      - name: fk_motivo_venda
+        description: Motivo de venda.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_motivos_venda')
+                field: pk_motivo_venda
+
+  - name: dim_datas
+    description: Dimensão calendário diária de 2011 a 2014.
+    columns:
+      - name: pk_data
+        description: Data.
+        data_tests: [unique, not_null]
+      - name: ano
+        description: Ano.
+      - name: trimestre
+        description: Trimestre (1 a 4).
+      - name: mes
+        description: Mês (1 a 12).
+      - name: nome_mes
+        description: Nome do mês em português.
+      - name: ano_mes
+        description: Ano e mês no formato AAAAMM, útil para ordenar séries temporais.
+      - name: dia
+        description: Dia do mês.

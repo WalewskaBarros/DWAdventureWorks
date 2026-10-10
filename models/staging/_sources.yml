@@ -1,0 +1,141 @@
+version: 2
+
+sources:
+  - name: erp_adventure_works
+    description: >
+      Dados brutos do ERP da Adventure Works, carregados no Databricks pelo notebook
+      fea/databases_ingestion do repositório indiciumtech/databricks-datasources.
+      Cada tabela do PostgreSQL de origem virou uma tabela Delta no formato <schema>_<tabela>.
+    database: "{{ var('source_catalog') }}"
+    schema: "{{ var('source_schema') }}"
+    tables:
+      - name: sales_salesorderheader
+        description: Cabeçalho dos pedidos de venda (um registro por pedido).
+        columns:
+          - name: salesorderid
+            description: Chave primária do pedido.
+            data_tests: [unique, not_null]
+          - name: customerid
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('erp_adventure_works', 'sales_customer')
+                    field: customerid
+          - name: shiptoaddressid
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('erp_adventure_works', 'person_address')
+                    field: addressid
+          - name: orderdate
+            data_tests: [not_null]
+
+      - name: sales_salesorderdetail
+        description: Itens dos pedidos de venda (um registro por produto em cada pedido).
+        columns:
+          - name: salesorderdetailid
+            description: Chave primária do item do pedido.
+            data_tests: [unique, not_null]
+          - name: salesorderid
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('erp_adventure_works', 'sales_salesorderheader')
+                    field: salesorderid
+          - name: productid
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('erp_adventure_works', 'production_product')
+                    field: productid
+          - name: orderqty
+            data_tests: [not_null]
+          - name: unitprice
+            data_tests: [not_null]
+
+      - name: sales_salesorderheadersalesreason
+        description: Tabela associativa pedido x motivo de venda (um pedido pode ter vários motivos).
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [salesorderid, salesreasonid]
+        columns:
+          - name: salesorderid
+            data_tests: [not_null]
+          - name: salesreasonid
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('erp_adventure_works', 'sales_salesreason')
+                    field: salesreasonid
+
+      - name: sales_salesreason
+        description: Cadastro de motivos de venda.
+        columns:
+          - name: salesreasonid
+            data_tests: [unique, not_null]
+
+      - name: sales_customer
+        description: Cadastro de clientes (pessoa física e/ou loja revendedora).
+        columns:
+          - name: customerid
+            data_tests: [unique, not_null]
+
+      - name: sales_store
+        description: Lojas revendedoras.
+        columns:
+          - name: businessentityid
+            data_tests: [unique, not_null]
+
+      - name: sales_creditcard
+        description: Cartões de crédito usados nos pedidos.
+        columns:
+          - name: creditcardid
+            data_tests: [unique, not_null]
+
+      - name: person_person
+        description: Pessoas (clientes, contatos de lojas e funcionários).
+        columns:
+          - name: businessentityid
+            data_tests: [unique, not_null]
+
+      - name: person_address
+        description: Endereços.
+        columns:
+          - name: addressid
+            data_tests: [unique, not_null]
+
+      - name: person_stateprovince
+        description: Estados / províncias.
+        columns:
+          - name: stateprovinceid
+            data_tests: [unique, not_null]
+
+      - name: person_countryregion
+        description: Países.
+        columns:
+          - name: countryregioncode
+            data_tests: [unique, not_null]
+
+      - name: production_product
+        description: Cadastro de produtos.
+        columns:
+          - name: productid
+            data_tests: [unique, not_null]
+
+      - name: production_productsubcategory
+        description: Subcategorias de produto.
+        columns:
+          - name: productsubcategoryid
+            data_tests: [unique, not_null]
+
+      - name: production_productcategory
+        description: Categorias de produto.
+        columns:
+          - name: productcategoryid
+            data_tests: [unique, not_null]

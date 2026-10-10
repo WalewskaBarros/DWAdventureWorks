@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: stg_erp__pedidos
+    description: Pedidos de venda com tipos corrigidos e nomes em português.
+    columns:
+      - name: id_pedido
+        data_tests: [unique, not_null]
+  - name: stg_erp__pedidos_itens
+    description: Itens dos pedidos de venda.
+    columns:
+      - name: id_item_pedido
+        data_tests: [unique, not_null]
+  - name: stg_erp__pedidos_motivos
+    description: Relação pedido x motivo de venda.
+  - name: stg_erp__motivos_venda
+    description: Cadastro de motivos de venda.
+    columns:
+      - name: id_motivo_venda
+        data_tests: [unique, not_null]
+  - name: stg_erp__clientes
+    description: Clientes.
+    columns:
+      - name: id_cliente
+        data_tests: [unique, not_null]
+  - name: stg_erp__lojas
+    description: Lojas revendedoras.
+  - name: stg_erp__cartoes
+    description: Cartões de crédito.
+  - name: stg_erp__pessoas
+    description: Pessoas.
+  - name: stg_erp__enderecos
+    description: Endereços.
+  - name: stg_erp__estados
+    description: Estados / províncias.
+  - name: stg_erp__paises
+    description: Países.
+  - name: stg_erp__produtos
+    description: Produtos.
+  - name: stg_erp__subcategorias
+    description: Subcategorias de produto.
+  - name: stg_erp__categorias
+    description: Categorias de produto.
