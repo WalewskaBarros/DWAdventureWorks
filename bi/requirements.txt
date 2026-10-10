@@ -1,0 +1,2 @@
+pandas>=2.0
+databricks-sql-connector>=3.0
