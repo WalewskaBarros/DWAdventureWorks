@@ -1,0 +1,27 @@
+name: 'adventure_works'
+version: '1.0.0'
+config-version: 2
+
+profile: 'adventure_works'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  source_catalog: "fea_academy"
+  source_schema: "adventure_works"
+
+models:
+  adventure_works:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
