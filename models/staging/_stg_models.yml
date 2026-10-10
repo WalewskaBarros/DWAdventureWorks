@@ -34,7 +34,10 @@ models:
   - name: stg_erp__estados
     description: Estados / províncias.
   - name: stg_erp__paises
-    description: Países.
+    description: Países, com o código da Namíbia ("NA") restaurado após a ingestão.
+    columns:
+      - name: codigo_pais
+        data_tests: [unique, not_null]
   - name: stg_erp__produtos
     description: Produtos.
   - name: stg_erp__subcategorias
