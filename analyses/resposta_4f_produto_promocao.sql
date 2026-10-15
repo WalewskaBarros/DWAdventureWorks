@@ -1,6 +1,6 @@
 -- Pergunta 4-f: qual produto tem a maior quantidade de unidades compradas
 -- para o motivo de venda "On Promotion" (tipo Promotion)?
--- Compile com `dbt compile` e rode o SQL gerado no SQL Editor do Databricks.
+
 select
     produtos.nome_produto
     , sum(vendas.quantidade) as unidades_compradas
