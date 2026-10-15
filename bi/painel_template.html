@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adventure Works · Painel de Vendas</title>
+<meta name="description" content="Painel interativo de vendas da Adventure Works construído sobre os marts do dbt (Databricks).">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --surface-2: #f3f2ee;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6;
+  --series-1-soft: #cde2fb;
+  --accent-ink: #1c5cab;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --critical: #d03b3b;
+  --shadow: 0 1px 2px rgba(11,11,11,0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --surface-2: #232322;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5;
+    --series-1-soft: #184f95;
+    --accent-ink: #86b6ef;
+    --good: #0ca30c;
+    --good-text: #0ca30c;
+    --critical: #e66767;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --surface-2: #232322;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255,255,255,0.10);
+  --series-1: #3987e5;
+  --series-1-soft: #184f95;
+  --accent-ink: #86b6ef;
+  --good: #0ca30c;
+  --good-text: #0ca30c;
+  --critical: #e66767;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 20px; }
+header.top { padding: 22px 0 14px; display: flex; gap: 16px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; }
+header.top h1 { font-size: 22px; line-height: 1.2; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
+header.top p { margin: 0; color: var(--text-secondary); }
+.theme-toggle { border: 1px solid var(--border); background: var(--surface-1); border-radius: 8px; padding: 6px 10px; cursor: pointer; color: var(--text-secondary); }
+
+/* Filtros */
+.filters { position: sticky; top: 0; z-index: 20; background: var(--page); padding: 10px 0 12px; border-bottom: 1px solid var(--grid); }
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.f-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f-item > label, .f-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; }
+.f-item select, .ms-btn {
+  height: 34px; border: 1px solid var(--border); background: var(--surface-1); border-radius: 8px; padding: 0 10px;
+  min-width: 0; max-width: 220px; cursor: pointer; text-align: left;
+}
+.ms { position: relative; }
+.ms-btn { display: flex; align-items: center; gap: 6px; width: 170px; white-space: nowrap; overflow: hidden; }
+.ms-btn span { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.ms-btn.active { border-color: var(--series-1); box-shadow: inset 0 0 0 1px var(--series-1); }
+.ms-btn::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(45deg) translateY(-2px); flex: none; }
+.ms-pop {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; width: 300px; max-width: 86vw;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  padding: 8px; display: none;
+}
+.ms.open .ms-pop { display: block; }
+.ms-pop input[type=search] { width: 100%; height: 32px; border: 1px solid var(--border); border-radius: 7px; padding: 0 8px; background: var(--surface-2); }
+.ms-list { max-height: 260px; overflow: auto; margin: 6px 0; }
+.ms-opt { display: flex; gap: 8px; align-items: flex-start; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+.ms-opt:hover { background: var(--surface-2); }
+.ms-opt input { margin-top: 3px; accent-color: var(--series-1); }
+.ms-opt small { color: var(--text-muted); display: block; font-size: 11px; }
+.ms-foot { display: flex; justify-content: space-between; gap: 6px; border-top: 1px solid var(--grid); padding-top: 6px; }
+.ms-foot button, .link-btn { background: none; border: 0; color: var(--accent-ink); cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.ms-foot button:hover, .link-btn:hover { background: var(--surface-2); }
+.ms-note { color: var(--text-muted); font-size: 12px; padding: 4px 6px; }
+.clear-all { height: 34px; border: 1px solid var(--border); background: transparent; border-radius: 8px; padding: 0 12px; cursor: pointer; color: var(--text-secondary); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 0; }
+.chip { font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 4px 2px 10px; display: inline-flex; align-items: center; gap: 4px; max-width: 320px; }
+.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip button { border: 0; background: none; cursor: pointer; color: var(--text-muted); width: 20px; height: 20px; border-radius: 50%; line-height: 1; }
+.chip button:hover { background: var(--grid); }
+
+/* KPIs */
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); min-width: 0; }
+.kpi .k-label { color: var(--text-secondary); font-size: 12px; }
+.kpi .k-value { font-size: 22px; font-weight: 650; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .k-sub { color: var(--text-muted); font-size: 12px; }
+
+/* Abas */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--grid); overflow-x: auto; scrollbar-width: thin; }
+.tab { border: 0; background: none; padding: 10px 12px; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600; }
+.tab:hover { color: var(--text-primary); }
+.panel { display: none; padding: 16px 0 40px; }
+.panel.active { display: block; }
+.q { margin: 0 0 4px; font-size: 17px; font-weight: 620; }
+.q-sub { margin: 0 0 14px; color: var(--text-secondary); max-width: 900px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+.seg button { border: 0; background: none; padding: 6px 12px; cursor: pointer; color: var(--text-secondary); height: 32px; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 14px; font-weight: 620; }
+.card .note { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
+.chart { width: 100%; height: 420px; }
+.chart.sm { height: 300px; }
+.chart.lg { height: 520px; }
+
+/* Tabelas */
+.tbl-wrap { max-height: 520px; overflow: auto; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }
+th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap; }
+th.num, td.num { text-align: right; white-space: nowrap; }
+th[aria-sort="descending"]::after { content: " ↓"; }
+th[aria-sort="ascending"]::after { content: " ↑"; }
+tbody tr:hover { background: var(--surface-2); }
+.tbl-foot { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
+
+/* Destaque (4f e qualidade) */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 14px; }
+.hero .big { font-size: 30px; font-weight: 680; line-height: 1.15; margin: 4px 0; }
+.hero .big-sub { color: var(--text-secondary); font-size: 15px; }
+.status-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--good-text); font-weight: 600; }
+.status-bad { display: inline-flex; align-items: center; gap: 6px; color: var(--critical); font-weight: 600; }
+.status-ok svg, .status-bad svg { flex: none; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 8px 0 0; }
+.facts dt { color: var(--text-secondary); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+footer { color: var(--text-muted); font-size: 12px; padding: 18px 0 30px; border-top: 1px solid var(--grid); }
+footer a { color: var(--accent-ink); }
+.loading { padding: 80px 0; text-align: center; color: var(--text-secondary); }
+.empty { color: var(--text-muted); padding: 40px 0; text-align: center; }
+
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid2, .grid3, .hero { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filters { position: static; }
+  .ms-btn { width: 150px; }
+  .chart { height: 360px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Adventure Works · Painel de Vendas</h1>
+      <p>Data warehouse de vendas modelado em dbt sobre o Databricks · pedidos de mai/2011 a jun/2014</p>
+    </div>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar tema claro/escuro">◐ Tema</button>
+  </header>
+</div>
+
+<div class="filters" id="filters" aria-label="Filtros do painel">
+  <div class="wrap">
+    <div class="filter-row" id="filterRow"></div>
+    <div class="chips" id="chips" aria-live="polite"></div>
+  </div>
+</div>
+
+<main class="wrap" id="app">
+  <div class="loading" id="loading">Carregando dados…</div>
+</main>
+
+<div class="wrap">
+  <footer id="footer"></footer>
+</div>
+
+<script>/*__PLOTLY__*/</script>
+<script>
+"use strict";
+const DADOS_B64 = "__DADOS_GZIP_BASE64__";
+const VENDA_BRUTA_2011_AUDITADA = 12646112.16;
+const MOTIVO_PROMOCAO = "On Promotion";
+
+// ---------- utilidades ----------
+const nfInt = new Intl.NumberFormat("pt-BR");
+const nfMoney = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtInt = (v) => nfInt.format(Math.round(v));
+const fmtMoney = (v) => "US$ " + nfMoney.format(v);
+const fmtMoneyShort = (v) => {
+  const a = Math.abs(v);
+  if (a >= 1e6) return "US$ " + new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(v / 1e6) + " mi";
+  if (a >= 1e3) return "US$ " + new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(v / 1e3) + " mil";
+  return fmtMoney(v);
+};
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null) n.append(c);
+  return n;
+};
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+async function carregarDados() {
+  const bin = Uint8Array.from(atob(DADOS_B64), (c) => c.charCodeAt(0));
+  const stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return JSON.parse(await new Response(stream).text());
+}
+
+// ---------- estado ----------
+let D, N, MES, ANO, LIQ, MESES_LISTA;
+const F = {
+  de: null, ate: null,
+  produto: new Set(), categoria: new Set(), cartao: new Set(), motivo: new Set(),
+  status: new Set(), pais: new Set(), estado: new Set(), cidade: new Set(), cliente: new Set(),
+};
+const VIEW = { aba: "geral", dim4a: "produto", met4a: "bruto", gran4b: "geral", min4b: 1, gran4e: "mes" };
+
+function preparar() {
+  N = D.f.pedido.length;
+  const d0 = new Date(D.meta.dia_zero + "T00:00:00Z");
+  MES = new Int32Array(N); ANO = new Int32Array(N); LIQ = new Float64Array(N);
+  const cacheMes = new Map();
+  for (let i = 0; i < N; i++) {
+    const dia = D.f.dia[i];
+    let m = cacheMes.get(dia);
+    if (m === undefined) {
+      const dt = new Date(d0.getTime() + dia * 86400000);
+      m = dt.getUTCFullYear() * 12 + dt.getUTCMonth();
+      cacheMes.set(dia, m);
+    }
+    MES[i] = m; ANO[i] = Math.floor(m / 12);
+    LIQ[i] = (D.f.bruto[i] / 10000) * (1 - D.descontos[D.f.desc[i]]);
+  }
+  const ms = new Set(MES);
+  MESES_LISTA = [...ms].sort((a, b) => a - b);
+  F.de = MESES_LISTA[0]; F.ate = MESES_LISTA[MESES_LISTA.length - 1];
+}
+const rotuloMes = (m) => MESES[m % 12] + "/" + Math.floor(m / 12);
+const rotuloDia = (dia) => {
+  const dt = new Date(new Date(D.meta.dia_zero + "T00:00:00Z").getTime() + dia * 86400000);
+  return dt.toISOString().slice(0, 10).split("-").reverse().join("/");
+};
+
+// filtra o conjunto de linhas da fato; ignorar = lista de filtros a não aplicar
+function linhasFiltradas(ignorar = []) {
+  const skip = new Set(ignorar);
+  const f = D.f, loc = D.locais;
+  const usar = (k) => !skip.has(k) && F[k].size > 0;
+  const uProd = usar("produto"), uCat = usar("categoria"), uCar = usar("cartao"), uSta = usar("status");
+  const uPais = usar("pais"), uEst = usar("estado"), uCid = usar("cidade"), uCli = usar("cliente");
+  let mascMot = 0;
+  if (usar("motivo")) for (const b of F.motivo) mascMot |= (1 << b);
+  const out = new Int32Array(N); let n = 0;
+  for (let i = 0; i < N; i++) {
+    const m = MES[i];
+    if (m < F.de || m > F.ate) continue;
+    if (uProd && !F.produto.has(f.produto[i])) continue;
+    if (uCat && !F.categoria.has(D.produtos.categoria[f.produto[i]])) continue;
+    if (uCar && !F.cartao.has(f.cartao[i])) continue;
+    if (uSta && !F.status.has(f.status[i])) continue;
+    if (uCli && !F.cliente.has(f.cliente[i])) continue;
+    if (uPais || uEst || uCid) {
+      const l = loc[f.local[i]];
+      if (uPais && !F.pais.has(l[0])) continue;
+      if (uEst && !F.estado.has(l[0] + "|" + l[1])) continue;
+      if (uCid && !F.cidade.has(f.local[i])) continue;
+    }
+    if (mascMot && !(D.pedidos.motivos[f.pedido[i]] & mascMot)) continue;
+    out[n++] = i;
+  }
+  return out.subarray(0, n);
+}
+
+// agrega por chave; chaveFn pode devolver um número/texto ou uma lista (para motivos)
+function agregar(linhas, chaveFn) {
+  const g = new Map();
+  const add = (k, i) => {
+    let a = g.get(k);
+    if (!a) { a = { ped: new Set(), qtd: 0, bruto: 0, liq: 0 }; g.set(k, a); }
+    a.ped.add(D.f.pedido[i]); a.qtd += D.f.qtd[i]; a.bruto += D.f.bruto[i]; a.liq += LIQ[i];
+  };
+  for (const i of linhas) {
+    const k = chaveFn(i);
+    if (Array.isArray(k)) for (const kk of k) add(kk, i); else add(k, i);
+  }
+  const res = [];
+  for (const [k, a] of g) res.push({ k, pedidos: a.ped.size, qtd: a.qtd, bruto: a.bruto / 10000, liq: a.liq, ticket: a.ped.size ? a.liq / a.ped.size : 0 });
+  return res;
+}
+function totais(linhas) {
+  const ped = new Set(); let qtd = 0, bruto = 0, liq = 0;
+  for (const i of linhas) { ped.add(D.f.pedido[i]); qtd += D.f.qtd[i]; bruto += D.f.bruto[i]; liq += LIQ[i]; }
+  return { pedidos: ped.size, qtd, bruto: bruto / 10000, liq, ticket: ped.size ? liq / ped.size : 0 };
+}
+const bitsMotivo = (mask) => { const r = []; for (let b = 0; b < D.motivos.length; b++) if (mask & (1 << b)) r.push(b); return r; };
+
+// dimensões disponíveis para "ver por"
+const DIMS = {
+  produto: { rot: "Produto", chave: (i) => D.f.produto[i], nome: (k) => D.produtos.nome[k] },
+  categoria: { rot: "Categoria", chave: (i) => D.produtos.categoria[D.f.produto[i]], nome: (k) => k },
+  cartao: { rot: "Tipo de cartão", chave: (i) => D.f.cartao[i], nome: (k) => D.cartoes[k] },
+  motivo: { rot: "Motivo de venda", chave: (i) => bitsMotivo(D.pedidos.motivos[D.f.pedido[i]]), nome: (k) => D.motivos[k] },
+  mes: { rot: "Data de venda (mês)", chave: (i) => MES[i], nome: rotuloMes, tempo: true },
+  dia: { rot: "Data de venda (dia)", chave: (i) => D.f.dia[i], nome: rotuloDia, tempo: true },
+  cliente: { rot: "Cliente", chave: (i) => D.f.cliente[i], nome: (k) => D.clientes.nome[k] },
+  status: { rot: "Status", chave: (i) => D.f.status[i], nome: (k) => D.status[k] },
+  cidade: { rot: "Cidade", chave: (i) => D.f.local[i], nome: (k) => D.locais[k][2] + " (" + D.locais[k][1] + ")" },
+  estado: { rot: "Estado", chave: (i) => D.locais[D.f.local[i]][0] + "|" + D.locais[D.f.local[i]][1], nome: (k) => k.split("|")[1] + " (" + k.split("|")[0] + ")" },
+  pais: { rot: "País", chave: (i) => D.locais[D.f.local[i]][0], nome: (k) => k },
+  ano: { rot: "Ano", chave: (i) => ANO[i], nome: (k) => String(k), tempo: true },
+};
+const METRICAS = {
+  bruto: { rot: "Valor total negociado", fmt: fmtMoney, curto: fmtMoneyShort },
+  qtd: { rot: "Quantidade comprada", fmt: fmtInt, curto: fmtInt },
+  pedidos: { rot: "Número de pedidos", fmt: fmtInt, curto: fmtInt },
+};
+
+// ---------- multisseleção ----------
+let msAberto = null;
+document.addEventListener("click", (e) => { if (msAberto && !msAberto.contains(e.target)) { msAberto.classList.remove("open"); msAberto = null; } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && msAberto) { msAberto.classList.remove("open"); msAberto.querySelector(".ms-btn").focus(); msAberto = null; } });
+
+function multiSelect({ id, rotulo, chave, opcoes }) {
+  // opcoes: () => [{ v, t, sub? }]
+  const box = el("div", { class: "ms" });
+  const btnTxt = el("span", { text: "Todos" });
+  const btn = el("button", { class: "ms-btn", type: "button", id, "aria-haspopup": "listbox", "aria-expanded": "false" }, btnTxt);
+  const busca = el("input", { type: "search", placeholder: "Buscar…", "aria-label": "Buscar " + rotulo });
+  const lista = el("div", { class: "ms-list", role: "listbox", "aria-multiselectable": "true" });
+  const nota = el("div", { class: "ms-note" });
+  const pop = el("div", { class: "ms-pop" }, busca, lista, nota,
+    el("div", { class: "ms-foot" },
+      el("button", { type: "button", text: "Marcar visíveis", onclick: () => { for (const o of visiveis) F[chave].add(o.v); aplicar(); desenhar(); } }),
+      el("button", { type: "button", text: "Limpar", onclick: () => { F[chave].clear(); aplicar(); desenhar(); } })));
+  box.append(btn, pop);
+  let visiveis = [];
+  const LIM = 300;
+  function desenhar() {
+    const q = busca.value.trim().toLowerCase();
+    const todas = opcoes();
+    const filtradas = q ? todas.filter((o) => (o.t + " " + (o.sub || "")).toLowerCase().includes(q)) : todas;
+    // selecionados primeiro
+    filtradas.sort((a, b) => (F[chave].has(b.v) - F[chave].has(a.v)));
+    visiveis = filtradas.slice(0, LIM);
+    lista.replaceChildren(...visiveis.map((o) => {
+      const cb = el("input", { type: "checkbox" }); cb.checked = F[chave].has(o.v);
+      cb.addEventListener("change", () => { if (cb.checked) F[chave].add(o.v); else F[chave].delete(o.v); aplicar(); });
+      return el("label", { class: "ms-opt", role: "option", "aria-selected": String(cb.checked) }, cb,
+        el("div", {}, el("div", { text: o.t }), o.sub ? el("small", { text: o.sub }) : null));
+    }));
+    nota.textContent = filtradas.length > LIM ? `Mostrando ${LIM} de ${fmtInt(filtradas.length)} — refine a busca.` : (filtradas.length ? "" : "Nada encontrado.");
+  }
+  busca.addEventListener("input", desenhar);
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const abrir = !box.classList.contains("open");
+    if (msAberto && msAberto !== box) msAberto.classList.remove("open");
+    box.classList.toggle("open", abrir); btn.setAttribute("aria-expanded", String(abrir));
+    msAberto = abrir ? box : null;
+    if (abrir) { busca.value = ""; desenhar(); busca.focus(); }
+  });
+  box.atualizarRotulo = () => {
+    const n = F[chave].size;
+    btn.classList.toggle("active", n > 0);
+    if (n === 0) btnTxt.textContent = "Todos";
+    else if (n === 1) { const v = [...F[chave]][0]; const o = opcoes().find((x) => x.v === v); btnTxt.textContent = o ? o.t : "1 selecionado"; }
+    else btnTxt.textContent = n + " selecionados";
+  };
+  return el("div", { class: "f-item" }, el("label", { for: id, text: rotulo }), box);
+}
+
+// opções (com cascata geográfica)
+const OPC = {
+  produto: () => D.produtos.nome.map((t, v) => ({ v, t, sub: D.produtos.categoria[v] + " · " + D.produtos.subcategoria[v] })).sort((a, b) => a.t.localeCompare(b.t, "pt-BR")),
+  categoria: () => [...new Set(D.produtos.categoria)].sort().map((v) => ({ v, t: v })),
+  cartao: () => D.cartoes.map((t, v) => ({ v, t })),
+  motivo: () => D.motivos.map((t, v) => ({ v, t })),
+  status: () => D.status.map((t, v) => ({ v, t })),
+  pais: () => [...new Set(D.locais.map((l) => l[0]))].sort().map((v) => ({ v, t: v })),
+  estado: () => {
+    const s = new Map();
+    for (const l of D.locais) if (!F.pais.size || F.pais.has(l[0])) s.set(l[0] + "|" + l[1], { v: l[0] + "|" + l[1], t: l[1], sub: l[0] });
+    return [...s.values()].sort((a, b) => a.t.localeCompare(b.t, "pt-BR"));
+  },
+  cidade: () => D.locais.map((l, v) => ({ v, t: l[2], sub: l[1] + " · " + l[0], l }))
+    .filter((o) => (!F.pais.size || F.pais.has(o.l[0])) && (!F.estado.size || F.estado.has(o.l[0] + "|" + o.l[1])))
+    .sort((a, b) => a.t.localeCompare(b.t, "pt-BR")),
+  cliente: () => D.clientes.nome.map((t, v) => ({ v, t, sub: D.clientes.tipo[v] })),
+};
+let OPC_CACHE = {};
+const opc = (k) => () => (OPC_CACHE[k] ||= OPC[k]());
+
+const CONTROLES = {};
+function montarFiltros() {
+  const row = document.getElementById("filterRow");
+  const selDe = el("select", { id: "fDe" }), selAte = el("select", { id: "fAte" });
+  for (const m of MESES_LISTA) { selDe.append(el("option", { value: m, text: rotuloMes(m) })); selAte.append(el("option", { value: m, text: rotuloMes(m) })); }
+  selDe.value = F.de; selAte.value = F.ate;
+  selDe.addEventListener("change", () => { F.de = +selDe.value; if (F.de > F.ate) { F.ate = F.de; selAte.value = F.ate; } aplicar(); });
+  selAte.addEventListener("change", () => { F.ate = +selAte.value; if (F.ate < F.de) { F.de = F.ate; selDe.value = F.de; } aplicar(); });
+  const anos = [...new Set(MESES_LISTA.map((m) => Math.floor(m / 12)))];
+  const selAno = el("select", { id: "fAno" }, el("option", { value: "", text: "Período livre" }), ...anos.map((a) => el("option", { value: a, text: String(a) })));
+  selAno.addEventListener("change", () => {
+    if (selAno.value === "") { F.de = MESES_LISTA[0]; F.ate = MESES_LISTA[MESES_LISTA.length - 1]; }
+    else { const a = +selAno.value; const ms = MESES_LISTA.filter((m) => Math.floor(m / 12) === a); F.de = ms[0]; F.ate = ms[ms.length - 1]; }
+    selDe.value = F.de; selAte.value = F.ate; aplicar();
+  });
+  CONTROLES.periodo = { selDe, selAte, selAno };
+  row.append(
+    el("div", { class: "f-item" }, el("label", { for: "fAno", text: "Ano" }), selAno),
+    el("div", { class: "f-item" }, el("label", { for: "fDe", text: "De" }), selDe),
+    el("div", { class: "f-item" }, el("label", { for: "fAte", text: "Até" }), selAte),
+  );
+  const defs = [
+    ["produto", "Produto"], ["categoria", "Categoria"], ["cartao", "Tipo de cartão"], ["motivo", "Motivo de venda"],
+    ["status", "Status"], ["cliente", "Cliente"], ["pais", "País"], ["estado", "Estado"], ["cidade", "Cidade"],
+  ];
+  for (const [k, r] of defs) {
+    const ctl = multiSelect({ id: "f_" + k, rotulo: r, chave: k, opcoes: k === "estado" || k === "cidade" ? OPC[k] : opc(k) });
+    CONTROLES[k] = ctl.querySelector(".ms");
+    row.append(ctl);
+  }
+  row.append(el("button", { class: "clear-all", type: "button", text: "Limpar filtros", onclick: limparFiltros }));
+}
+function limparFiltros() {
+  for (const k of Object.keys(F)) if (F[k] instanceof Set) F[k].clear();
+  F.de = MESES_LISTA[0]; F.ate = MESES_LISTA[MESES_LISTA.length - 1];
+  CONTROLES.periodo.selDe.value = F.de; CONTROLES.periodo.selAte.value = F.ate; CONTROLES.periodo.selAno.value = "";
+  aplicar();
+}
+function nomeFiltro(k, v) {
+  switch (k) {
+    case "produto": return D.produtos.nome[v];
+    case "cartao": return D.cartoes[v];
+    case "motivo": return D.motivos[v];
+    case "status": return D.status[v];
+    case "cliente": return D.clientes.nome[v];
+    case "estado": return v.split("|")[1];
+    case "cidade": return D.locais[v][2];
+    default: return String(v);
+  }
+}
+function desenharChips() {
+  const box = document.getElementById("chips");
+  const rot = { produto: "Produto", categoria: "Categoria", cartao: "Cartão", motivo: "Motivo", status: "Status", cliente: "Cliente", pais: "País", estado: "Estado", cidade: "Cidade" };
+  const chips = [];
+  if (F.de !== MESES_LISTA[0] || F.ate !== MESES_LISTA[MESES_LISTA.length - 1]) chips.push(el("span", { class: "chip" }, el("span", { text: `Período: ${rotuloMes(F.de)} – ${rotuloMes(F.ate)}` })));
+  for (const k of Object.keys(rot)) for (const v of F[k]) {
+    chips.push(el("span", { class: "chip" }, el("span", { text: rot[k] + ": " + nomeFiltro(k, v) }),
+      el("button", { type: "button", "aria-label": "Remover filtro", text: "×", onclick: () => { F[k].delete(v); aplicar(); } })));
+  }
+  box.replaceChildren(...chips);
+}
+
+// ---------- gráficos ----------
+function baseLayout(extra = {}) {
+  const ink = cssVar("--text-secondary"), grid = cssVar("--grid"), axis = cssVar("--axis");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', size: 12, color: ink },
+    separators: ",.",
+    margin: { l: 10, r: 16, t: 8, b: 36 },
+    hoverlabel: { bgcolor: cssVar("--surface-1"), bordercolor: cssVar("--border"), font: { color: cssVar("--text-primary"), size: 12 } },
+    xaxis: { gridcolor: grid, linecolor: axis, zeroline: false, automargin: true, tickfont: { color: cssVar("--text-muted") } },
+    yaxis: { gridcolor: grid, linecolor: axis, zeroline: false, automargin: true, tickfont: { color: cssVar("--text-muted") } },
+    bargap: 0.28, showlegend: false,
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true, locale: "pt-BR" };
+const truncar = (s, n = 38) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+
+function barrasH(div, linhas, { nome, valor, fmt, titulo }) {
+  const ys = linhas.map((r) => truncar(nome(r))).reverse();
+  const xs = linhas.map(valor).reverse();
+  const cd = linhas.map((r) => [nome(r), fmt(valor(r))]).reverse();
+  Plotly.react(div, [{
+    type: "bar", orientation: "h", x: xs, y: ys, customdata: cd,
+    marker: { color: cssVar("--series-1"), line: { width: 0 } },
+    hovertemplate: "<b>%{customdata[1]}</b><br>%{customdata[0]}<extra></extra>",
+    text: linhas.map((r) => fmt(valor(r))).reverse(), textposition: "outside", cliponaxis: false,
+    textfont: { color: cssVar("--text-secondary"), size: 11 },
+  }], baseLayout({ yaxis: Object.assign(baseLayout().yaxis, { type: "category", gridcolor: "rgba(0,0,0,0)" }), xaxis: Object.assign(baseLayout().xaxis, { title: { text: titulo, font: { size: 11 } }, showticklabels: false }), margin: { l: 10, r: 80, t: 6, b: 30 } }), CFG);
+}
+function serieTempo(div, pontos, { fmt, titulo, barras, compacto }) {
+  const cd = pontos.map((p) => [p.rot, fmt(p.y)]);
+  // eixo em formato brasileiro; valores monetários grandes em mil/milhões
+  let div_ = 1, tituloY = titulo, tickformat = ",.0f";
+  const max = Math.max(0, ...pontos.map((p) => p.y));
+  if (fmt === fmtMoney) {
+    if (max >= 1e6) { div_ = 1e6; tituloY = "US$ milhões"; tickformat = ",.1~f"; }
+    else if (max >= 1e3) { div_ = 1e3; tituloY = "US$ mil"; tickformat = ",.0f"; }
+    else tituloY = "US$";
+  }
+  const ys = pontos.map((p) => p.y / div_);
+  const trace = barras
+    ? { type: "bar", x: pontos.map((p) => p.rot), y: ys, customdata: cd, marker: { color: cssVar("--series-1") }, hovertemplate: "<b>%{customdata[1]}</b><br>%{customdata[0]}<extra></extra>" }
+    : { type: "scatter", mode: "lines+markers", x: pontos.map((p) => p.rot), y: ys, customdata: cd, line: { color: cssVar("--series-1"), width: 2 }, marker: { size: 6, color: cssVar("--series-1") }, hovertemplate: "<b>%{customdata[1]}</b><br>%{customdata[0]}<extra></extra>" };
+  Plotly.react(div, [trace], baseLayout({
+    hovermode: barras ? "closest" : "x",
+    xaxis: Object.assign(baseLayout().xaxis, { type: "category", showspikes: !barras, spikemode: "across", spikethickness: 1, spikecolor: cssVar("--axis"), spikedash: "solid", nticks: compacto ? 7 : 14, tickangle: compacto ? -40 : "auto" }),
+    yaxis: Object.assign(baseLayout().yaxis, { title: { text: tituloY, font: { size: 11 } }, rangemode: "tozero", tickformat }),
+    margin: { l: 10, r: 12, t: 6, b: 40 },
+  }), CFG);
+}
+
+// ---------- tabela ----------
+function tabela(host, colunas, linhas, { limite = 200, ordem } = {}) {
+  let sortCol = ordem ? ordem.col : null, sortDir = ordem ? ordem.dir : -1;
+  const wrap = el("div", { class: "tbl-wrap" });
+  const foot = el("div", { class: "tbl-foot" });
+  function render() {
+    let rows = linhas.slice();
+    if (sortCol != null) {
+      const c = colunas[sortCol];
+      rows.sort((a, b) => { const va = c.sortVal ? c.sortVal(a) : c.val(a), vb = c.sortVal ? c.sortVal(b) : c.val(b); return (va > vb ? 1 : va < vb ? -1 : 0) * sortDir; });
+    }
+    const thead = el("thead", {}, el("tr", {}, ...colunas.map((c, j) => {
+      const th = el("th", { class: c.num ? "num" : "", scope: "col", tabindex: "0", "aria-sort": sortCol === j ? (sortDir < 0 ? "descending" : "ascending") : null, text: c.rot });
+      const ativar = () => { if (sortCol === j) sortDir = -sortDir; else { sortCol = j; sortDir = c.num ? -1 : 1; } render(); };
+      th.addEventListener("click", ativar); th.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ativar(); } });
+      return th;
+    })));
+    const body = el("tbody", {}, ...rows.slice(0, limite).map((r) => el("tr", {}, ...colunas.map((c) => el("td", { class: c.num ? "num" : "", text: c.fmt ? c.fmt(c.val(r)) : String(c.val(r)) })))));
+    wrap.replaceChildren(el("table", {}, thead, body));
+    foot.textContent = rows.length > limite ? `Mostrando ${fmtInt(limite)} de ${fmtInt(rows.length)} linhas (ordene pelas colunas).` : `${fmtInt(rows.length)} linha(s).`;
+  }
+  render();
+  host.replaceChildren(wrap, foot);
+}
+
+// ---------- abas ----------
+const ABAS = [
+  ["geral", "Visão geral"],
+  ["a", "4a · Análise por dimensão"],
+  ["b", "4b · Ticket médio"],
+  ["c", "4c · Top 10 clientes"],
+  ["d", "4d · Top 5 cidades"],
+  ["e", "4e · Evolução mensal"],
+  ["f", "4f · Promoção"],
+  ["q", "Qualidade dos dados"],
+];
+let LINHAS = new Int32Array(0);
+
+function montarApp() {
+  const app = document.getElementById("app");
+  const kpis = el("section", { class: "kpis", id: "kpis", "aria-label": "Indicadores" });
+  const tabs = el("div", { class: "tabs", role: "tablist", "aria-label": "Perguntas de negócio" });
+  const panels = [];
+  for (const [id, rot] of ABAS) {
+    const b = el("button", { class: "tab", role: "tab", id: "tab-" + id, "aria-controls": "p-" + id, "aria-selected": String(id === VIEW.aba), type: "button", text: rot });
+    b.addEventListener("click", () => trocarAba(id));
+    tabs.append(b);
+    panels.push(el("section", { class: "panel" + (id === VIEW.aba ? " active" : ""), id: "p-" + id, role: "tabpanel", "aria-labelledby": "tab-" + id }));
+  }
+  tabs.addEventListener("keydown", (e) => {
+    const i = ABAS.findIndex(([id]) => id === VIEW.aba);
+    if (e.key === "ArrowRight") { trocarAba(ABAS[(i + 1) % ABAS.length][0]); document.getElementById("tab-" + VIEW.aba).focus(); }
+    if (e.key === "ArrowLeft") { trocarAba(ABAS[(i - 1 + ABAS.length) % ABAS.length][0]); document.getElementById("tab-" + VIEW.aba).focus(); }
+  });
+  app.replaceChildren(kpis, tabs, ...panels);
+}
+function trocarAba(id) {
+  VIEW.aba = id;
+  for (const [a] of ABAS) {
+    document.getElementById("tab-" + a).setAttribute("aria-selected", String(a === id));
+    document.getElementById("p-" + a).classList.toggle("active", a === id);
+  }
+  try { history.replaceState(null, "", "#" + id); } catch (e) { /* ignore */ }
+  renderAba();
+}
+
+function renderKpis() {
+  const t = totais(LINHAS);
+  const host = document.getElementById("kpis");
+  const k = (label, valor, sub) => el("div", { class: "kpi" }, el("div", { class: "k-label", text: label }), el("div", { class: "k-value", text: valor, title: valor }), sub ? el("div", { class: "k-sub", text: sub }) : null);
+  host.replaceChildren(
+    k("Número de pedidos", fmtInt(t.pedidos), `${fmtInt(LINHAS.length)} itens de pedido`),
+    k("Quantidade comprada", fmtInt(t.qtd), "unidades"),
+    k("Valor total negociado", fmtMoneyShort(t.bruto), fmtMoney(t.bruto)),
+    k("Valor negociado líquido", fmtMoneyShort(t.liq), "após descontos"),
+    k("Ticket médio", fmtMoney(t.ticket), "líquido ÷ pedidos"),
+  );
+}
+
+function seletor(rotulo, id, opcoes, valor, onChange) {
+  const s = el("select", { id }, ...opcoes.map(([v, t]) => el("option", { value: v, text: t })));
+  s.value = valor; s.addEventListener("change", () => onChange(s.value));
+  return el("div", { class: "f-item" }, el("label", { for: id, text: rotulo }), s);
+}
+function segmentado(opcoes, valor, onChange, rotulo) {
+  return el("div", { class: "f-item" }, el("span", { class: "f-label", text: rotulo }),
+    el("div", { class: "seg", role: "group", "aria-label": rotulo }, ...opcoes.map(([v, t]) => el("button", { type: "button", "aria-pressed": String(v === valor), text: t, onclick: () => onChange(v) }))));
+}
+const vazio = (host) => host.replaceChildren(el("div", { class: "empty", text: "Nenhuma venda para os filtros selecionados." }));
+const cartao = (titulo, ...kids) => el("div", { class: "card" }, titulo ? el("h3", { text: titulo }) : null, ...kids);
+
+function renderGeral() {
+  const p = document.getElementById("p-geral");
+  const cMes = el("div", { class: "chart" }), cPais = el("div", { class: "chart sm" }), cCat = el("div", { class: "chart sm" });
+  p.replaceChildren(
+    el("h2", { class: "q", text: "Visão geral das vendas" }),
+    el("p", { class: "q-sub", text: "Use os filtros acima: todos os indicadores, gráficos e tabelas do painel respondem ao mesmo recorte. Cada aba responde a uma pergunta de negócio do desafio." }),
+    cartao("Valor total negociado por mês", cMes),
+    el("div", { class: "grid2", style: "margin-top:14px" }, cartao("Valor total negociado por país", cPais), cartao("Valor total negociado por categoria", cCat)),
+  );
+  if (!LINHAS.length) return vazio(p);
+  const meses = agregar(LINHAS, DIMS.mes.chave).sort((a, b) => a.k - b.k);
+  serieTempo(cMes, meses.map((r) => ({ rot: rotuloMes(r.k), y: r.bruto })), { fmt: fmtMoney, titulo: "Valor negociado (US$)" });
+  const paises = agregar(LINHAS, DIMS.pais.chave).sort((a, b) => b.bruto - a.bruto);
+  barrasH(cPais, paises, { nome: (r) => r.k, valor: (r) => r.bruto, fmt: fmtMoneyShort, titulo: "Valor negociado" });
+  const cats = agregar(LINHAS, DIMS.categoria.chave).sort((a, b) => b.bruto - a.bruto);
+  barrasH(cCat, cats, { nome: (r) => r.k, valor: (r) => r.bruto, fmt: fmtMoneyShort, titulo: "Valor negociado" });
+}
+
+function renderA() {
+  const p = document.getElementById("p-a");
+  const dim = DIMS[VIEW.dim4a], met = METRICAS[VIEW.met4a];
+  const chart = el("div", { class: "chart lg" }), tbl = el("div");
+  const opcoesDim = ["produto", "cartao", "motivo", "mes", "dia", "cliente", "status", "cidade", "estado", "pais"].map((k) => [k, DIMS[k].rot]);
+  p.replaceChildren(
+    el("h2", { class: "q", text: "Qual o número de pedidos, a quantidade comprada e o valor total negociado por dimensão?" }),
+    el("p", { class: "q-sub", text: "Escolha a dimensão em “Ver por”. O gráfico mostra as 20 maiores pela métrica escolhida; a tabela traz todas, com as três métricas." }),
+    el("div", { class: "toolbar" },
+      seletor("Ver por", "dim4a", opcoesDim, VIEW.dim4a, (v) => { VIEW.dim4a = v; renderA(); }),
+      segmentado([["bruto", "Valor negociado"], ["qtd", "Quantidade"], ["pedidos", "Pedidos"]], VIEW.met4a, (v) => { VIEW.met4a = v; renderA(); }, "Métrica do gráfico")),
+    el("div", { class: "grid2" }, cartao(`${met.rot} por ${dim.rot.toLowerCase()}`, chart,
+      VIEW.dim4a === "motivo" ? el("p", { class: "note", text: "Um pedido com mais de um motivo aparece em cada motivo: a soma das linhas é maior que o total do painel." }) : null),
+      cartao("Tabela", tbl)),
+  );
+  if (!LINHAS.length) return vazio(p);
+  const rows = agregar(LINHAS, dim.chave);
+  const val = (r) => r[VIEW.met4a];
+  if (dim.tempo) {
+    rows.sort((a, b) => a.k - b.k);
+    serieTempo(chart, rows.map((r) => ({ rot: dim.nome(r.k), y: val(r) })), { fmt: met.fmt, titulo: met.rot, barras: VIEW.dim4a === "mes" });
+  } else {
+    const top = rows.slice().sort((a, b) => val(b) - val(a)).slice(0, 20);
+    barrasH(chart, top, { nome: (r) => dim.nome(r.k), valor: val, fmt: met.curto, titulo: met.rot });
+  }
+  tabela(tbl, [
+    { rot: dim.rot, val: (r) => dim.nome(r.k), sortVal: dim.tempo ? (r) => r.k : undefined },
+    { rot: "Pedidos", val: (r) => r.pedidos, fmt: fmtInt, num: true },
+    { rot: "Quantidade", val: (r) => r.qtd, fmt: fmtInt, num: true },
+    { rot: "Valor negociado", val: (r) => r.bruto, fmt: fmtMoney, num: true },
+  ], rows, { ordem: dim.tempo ? { col: 0, dir: 1 } : { col: VIEW.met4a === "bruto" ? 3 : VIEW.met4a === "qtd" ? 2 : 1, dir: -1 } });
+}
+
+function renderB() {
+  const p = document.getElementById("p-b");
+  const chart = el("div", { class: "chart lg" }), tbl = el("div");
+  const minInput = el("input", { type: "number", id: "min4b", min: "1", step: "1", value: String(VIEW.min4b), style: "height:34px;width:90px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--surface-1)" });
+  minInput.addEventListener("change", () => { VIEW.min4b = Math.max(1, +minInput.value || 1); renderB(); });
+  const grans = [["geral", "Período filtrado"], ["mes", "Mês"], ["ano", "Ano"], ["cidade", "Cidade"], ["estado", "Estado"], ["pais", "País"]];
+  p.replaceChildren(
+    el("h2", { class: "q", text: "Quais os produtos com maior ticket médio por mês, ano, cidade, estado e país?" }),
+    el("p", { class: "q-sub", text: "Ticket médio = (faturamento bruto − descontos do produto) ÷ número de pedidos do produto no período. O gráfico ranqueia os produtos no recorte filtrado; a tabela mostra o produto líder em cada mês, ano, cidade, estado ou país." }),
+    el("div", { class: "toolbar" },
+      seletor("Analisar por", "gran4b", grans, VIEW.gran4b, (v) => { VIEW.gran4b = v; renderB(); }),
+      el("div", { class: "f-item" }, el("label", { for: "min4b", text: "Mínimo de pedidos" }), minInput)),
+    el("div", { class: "grid2" }, cartao("Produtos com maior ticket médio (top 15)", chart), cartao(VIEW.gran4b === "geral" ? "Ranking de produtos" : "Produto com maior ticket médio em cada " + grans.find((g) => g[0] === VIEW.gran4b)[1].toLowerCase(), tbl)),
+  );
+  if (!LINHAS.length) return vazio(p);
+  const porProd = agregar(LINHAS, DIMS.produto.chave).filter((r) => r.pedidos >= VIEW.min4b).sort((a, b) => b.ticket - a.ticket);
+  barrasH(chart, porProd.slice(0, 15), { nome: (r) => D.produtos.nome[r.k], valor: (r) => r.ticket, fmt: fmtMoney, titulo: "Ticket médio (US$)" });
+  if (VIEW.gran4b === "geral") {
+    tabela(tbl, [
+      { rot: "Produto", val: (r) => D.produtos.nome[r.k] },
+      { rot: "Ticket médio", val: (r) => r.ticket, fmt: fmtMoney, num: true },
+      { rot: "Pedidos", val: (r) => r.pedidos, fmt: fmtInt, num: true },
+      { rot: "Valor líquido", val: (r) => r.liq, fmt: fmtMoney, num: true },
+    ], porProd, { ordem: { col: 1, dir: -1 } });
+    return;
+  }
+  const g = DIMS[VIEW.gran4b];
+  const combos = agregar(LINHAS, (i) => g.chave(i) + "§" + D.f.produto[i]);
+  const melhor = new Map();
+  for (const r of combos) {
+    if (r.pedidos < VIEW.min4b) continue;
+    const [gk, pk] = r.k.split("§");
+    const atual = melhor.get(gk);
+    if (!atual || r.ticket > atual.ticket) melhor.set(gk, { gk, pk: +pk, ticket: r.ticket, pedidos: r.pedidos, liq: r.liq });
+  }
+  const conv = (gk) => (g.tempo ? +gk : gk);
+  const linhas = [...melhor.values()];
+  tabela(tbl, [
+    { rot: g.rot, val: (r) => g.nome(conv(r.gk)), sortVal: g.tempo ? (r) => +r.gk : undefined },
+    { rot: "Produto", val: (r) => D.produtos.nome[r.pk] },
+    { rot: "Ticket médio", val: (r) => r.ticket, fmt: fmtMoney, num: true },
+    { rot: "Pedidos", val: (r) => r.pedidos, fmt: fmtInt, num: true },
+  ], linhas, { ordem: g.tempo ? { col: 0, dir: 1 } : { col: 2, dir: -1 } });
+}
+
+function renderTop(idPainel, { pergunta, sub, dim, n, extraCols }) {
+  const p = document.getElementById(idPainel);
+  const chart = el("div", { class: "chart" }), tbl = el("div");
+  p.replaceChildren(el("h2", { class: "q", text: pergunta }), el("p", { class: "q-sub", text: sub }),
+    el("div", { class: "grid2" }, cartao(`Top ${n} por valor total negociado`, chart), cartao("Detalhe", tbl)));
+  if (!LINHAS.length) return vazio(p);
+  const d = DIMS[dim];
+  const top = agregar(LINHAS, d.chave).sort((a, b) => b.bruto - a.bruto).slice(0, n);
+  barrasH(chart, top, { nome: (r) => d.nome(r.k), valor: (r) => r.bruto, fmt: fmtMoney, titulo: "Valor total negociado (US$)" });
+  tabela(tbl, [
+    { rot: "#", val: (r) => top.indexOf(r) + 1, num: true },
+    { rot: d.rot, val: (r) => d.nome(r.k) },
+    ...extraCols,
+    { rot: "Pedidos", val: (r) => r.pedidos, fmt: fmtInt, num: true },
+    { rot: "Quantidade", val: (r) => r.qtd, fmt: fmtInt, num: true },
+    { rot: "Valor negociado", val: (r) => r.bruto, fmt: fmtMoney, num: true },
+  ], top, { ordem: { col: 0, dir: 1 } });
+}
+
+function renderE() {
+  const p = document.getElementById("p-e");
+  const c1 = el("div", { class: "chart sm" }), c2 = el("div", { class: "chart sm" }), c3 = el("div", { class: "chart sm" }), tbl = el("div");
+  const g = VIEW.gran4e === "ano" ? DIMS.ano : DIMS.mes;
+  p.replaceChildren(
+    el("h2", { class: "q", text: "Qual o número de pedidos, a quantidade comprada e o valor total negociado por mês e ano?" }),
+    el("p", { class: "q-sub", text: "Três séries com escalas diferentes, em gráficos separados (sem eixo duplo). Passe o mouse para ver os valores do período." }),
+    el("div", { class: "toolbar" }, segmentado([["mes", "Mês"], ["ano", "Ano"]], VIEW.gran4e, (v) => { VIEW.gran4e = v; renderE(); }, "Granularidade")),
+    el("div", { class: "grid3" }, cartao("Número de pedidos", c1), cartao("Quantidade comprada", c2), cartao("Valor total negociado", c3)),
+    el("div", { style: "margin-top:14px" }, cartao("Tabela", tbl)),
+  );
+  if (!LINHAS.length) return vazio(p);
+  const rows = agregar(LINHAS, g.chave).sort((a, b) => a.k - b.k);
+  const pts = (f) => rows.map((r) => ({ rot: g.nome(r.k), y: f(r) }));
+  const barras = VIEW.gran4e === "ano";
+  serieTempo(c1, pts((r) => r.pedidos), { fmt: fmtInt, titulo: "Pedidos", barras, compacto: true });
+  serieTempo(c2, pts((r) => r.qtd), { fmt: fmtInt, titulo: "Unidades", barras, compacto: true });
+  serieTempo(c3, pts((r) => r.bruto), { fmt: fmtMoney, titulo: "US$", barras, compacto: true });
+  tabela(tbl, [
+    { rot: g.rot === "Ano" ? "Ano" : "Mês", val: (r) => g.nome(r.k), sortVal: (r) => r.k },
+    { rot: "Pedidos", val: (r) => r.pedidos, fmt: fmtInt, num: true },
+    { rot: "Quantidade", val: (r) => r.qtd, fmt: fmtInt, num: true },
+    { rot: "Valor negociado", val: (r) => r.bruto, fmt: fmtMoney, num: true },
+  ], rows, { ordem: { col: 0, dir: 1 } });
+}
+
+function renderF() {
+  const p = document.getElementById("p-f");
+  const chart = el("div", { class: "chart" });
+  const bitPromo = D.motivos.indexOf(MOTIVO_PROMOCAO);
+  const base = linhasFiltradas(["motivo"]);
+  const linhas = [];
+  for (const i of base) if (D.pedidos.motivos[D.f.pedido[i]] & (1 << bitPromo)) linhas.push(i);
+  const rows = agregar(linhas, DIMS.produto.chave).sort((a, b) => b.qtd - a.qtd);
+  const lider = rows[0];
+  p.replaceChildren(
+    el("h2", { class: "q", text: "Qual produto tem a maior quantidade de unidades compradas para o motivo de venda “Promotion”?" }),
+    el("p", { class: "q-sub", text: "Considera os pedidos com o motivo “On Promotion” (único motivo do tipo Promotion). Os demais filtros do painel continuam valendo; o filtro de motivo é fixado nesta aba." }),
+    el("div", { class: "hero" },
+      cartao("Resposta",
+        lider ? el("div", {}, el("div", { class: "big", text: D.produtos.nome[lider.k] }),
+          el("div", { class: "big-sub", text: `${fmtInt(lider.qtd)} unidades compradas em ${fmtInt(lider.pedidos)} pedidos com motivo “On Promotion”` }),
+          el("dl", { class: "facts" },
+            el("dt", { text: "Categoria" }), el("dd", { text: D.produtos.categoria[lider.k] + " · " + D.produtos.subcategoria[lider.k] }),
+            el("dt", { text: "Valor negociado" }), el("dd", { text: fmtMoney(lider.bruto) }),
+            el("dt", { text: "2º colocado" }), el("dd", { text: rows[1] ? `${D.produtos.nome[rows[1].k]} (${fmtInt(rows[1].qtd)} un.)` : "—" })))
+          : el("div", { class: "empty", text: "Nenhuma venda em promoção para os filtros selecionados." })),
+      cartao("Top 10 produtos por unidades em pedidos “On Promotion”", chart)),
+  );
+  if (rows.length) barrasH(chart, rows.slice(0, 10), { nome: (r) => D.produtos.nome[r.k], valor: (r) => r.qtd, fmt: fmtInt, titulo: "Unidades compradas" });
+}
+
+const ICON_OK = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.5 8.2l2.2 2.2 4.8-4.8" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_BAD = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>';
+function selo(ok, texto) {
+  const s = el("span", { class: ok ? "status-ok" : "status-bad" });
+  s.innerHTML = ok ? ICON_OK : ICON_BAD; // ícone estático (sem dados do usuário)
+  s.append(document.createTextNode(texto));
+  return s;
+}
+function renderQ() {
+  const p = document.getElementById("p-q");
+  // calculado sobre TODOS os dados, independentemente dos filtros
+  let bruto2011 = 0; const ped = new Set();
+  for (let i = 0; i < N; i++) { ped.add(D.f.pedido[i]); if (ANO[i] === 2011) bruto2011 += D.f.bruto[i]; }
+  const v2011 = Math.round(bruto2011 / 100) / 100;
+  const ok = Math.abs(v2011 - VENDA_BRUTA_2011_AUDITADA) < 0.005;
+  const semMotivo = D.motivos.indexOf("Não informado");
+  let pedSemMotivo = 0, pedMultiplos = 0;
+  for (const m of D.pedidos.motivos) { if (semMotivo >= 0 && m === (1 << semMotivo)) pedSemMotivo++; if (bitsMotivo(m).length > 1) pedMultiplos++; }
+  p.replaceChildren(
+    el("h2", { class: "q", text: "Qualidade e veracidade dos dados" }),
+    el("p", { class: "q-sub", text: "Pedido do CEO: confirmar que a informação do painel bate com a auditoria da contabilidade. O mesmo valor é garantido no pipeline pelo teste dbt assert_vendas_brutas_2011." }),
+    el("div", { class: "hero" },
+      cartao("Venda bruta de 2011",
+        el("div", { class: "big", text: fmtMoney(v2011) }),
+        el("div", { class: "big-sub", text: "Auditoria da contabilidade: " + fmtMoney(VENDA_BRUTA_2011_AUDITADA) }),
+        el("p", {}, selo(ok, ok ? " Valor confere com a auditoria" : " Valor diverge da auditoria"))),
+      cartao("Sobre a base",
+        el("dl", { class: "facts" },
+          el("dt", { text: "Itens de pedido (linhas da fato)" }), el("dd", { text: fmtInt(N) }),
+          el("dt", { text: "Pedidos" }), el("dd", { text: fmtInt(ped.size) }),
+          el("dt", { text: "Período" }), el("dd", { text: rotuloMes(MESES_LISTA[0]) + " a " + rotuloMes(MESES_LISTA[MESES_LISTA.length - 1]) }),
+          el("dt", { text: "Pedidos com mais de um motivo" }), el("dd", { text: fmtInt(pedMultiplos) + " (tratados por tabela ponte, sem duplicar valores)" }),
+          el("dt", { text: "Pedidos sem motivo informado" }), el("dd", { text: fmtInt(pedSemMotivo) }),
+          el("dt", { text: "Fonte" }), el("dd", { text: D.meta.fonte }),
+          el("dt", { text: "Gerado em" }), el("dd", { text: D.meta.gerado_em })),
+        el("p", { class: "note", text: "Testes do dbt: unicidade e não nulidade das chaves, integridade referencial da fato, valor líquido ≤ valor bruto e mesma contagem de linhas da origem. Um alerta documentado: o código da Namíbia (“NA”) chega nulo da ingestão e é corrigido na camada de staging." }))),
+  );
+}
+
+function renderAba() {
+  switch (VIEW.aba) {
+    case "geral": return renderGeral();
+    case "a": return renderA();
+    case "b": return renderB();
+    case "c": return renderTop("p-c", {
+      pergunta: "Quais os 10 melhores clientes por valor total negociado?",
+      sub: "Filtre por produto, tipo de cartão, motivo de venda, data, status, cidade, estado e país na barra de filtros.",
+      dim: "cliente", n: 10, extraCols: [{ rot: "Tipo", val: (r) => D.clientes.tipo[r.k] }],
+    });
+    case "d": return renderTop("p-d", {
+      pergunta: "Quais as 5 melhores cidades em valor total negociado?",
+      sub: "Filtre por produto, tipo de cartão, motivo de venda, data, cliente, status, estado e país na barra de filtros.",
+      dim: "cidade", n: 5, extraCols: [{ rot: "País", val: (r) => D.locais[r.k][0] }],
+    });
+    case "e": return renderE();
+    case "f": return renderF();
+    case "q": return renderQ();
+  }
+}
+
+let agendado = null;
+function aplicar() {
+  if (agendado) cancelAnimationFrame(agendado);
+  agendado = requestAnimationFrame(() => {
+    agendado = null;
+    LINHAS = linhasFiltradas();
+    for (const k of Object.keys(CONTROLES)) if (CONTROLES[k].atualizarRotulo) CONTROLES[k].atualizarRotulo();
+    desenharChips(); renderKpis(); renderAba();
+  });
+}
+
+// tema
+(function tema() {
+  const btn = document.getElementById("themeToggle");
+  let salvo = null;
+  try { salvo = localStorage.getItem("aw-tema"); } catch (e) { /* ignore */ }
+  if (salvo) document.documentElement.setAttribute("data-theme", salvo);
+  btn.addEventListener("click", () => {
+    const escuroAtual = document.documentElement.getAttribute("data-theme") === "dark" ||
+      (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    const novo = escuroAtual ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", novo);
+    try { localStorage.setItem("aw-tema", novo); } catch (e) { /* ignore */ }
+    if (D) renderAba();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (D) renderAba(); });
+})();
+
+(async function iniciar() {
+  try {
+    D = await carregarDados();
+  } catch (e) {
+    document.getElementById("loading").textContent = "Não foi possível carregar os dados. Use um navegador atualizado (Chrome, Edge, Firefox ou Safari).";
+    return;
+  }
+  preparar();
+  montarFiltros();
+  montarApp();
+  const hash = location.hash.replace("#", "");
+  if (ABAS.some(([id]) => id === hash)) VIEW.aba = hash;
+  trocarAba(VIEW.aba);
+  aplicar();
+  const foot = document.getElementById("footer");
+  foot.append(
+    document.createTextNode(`Fonte: ${D.meta.fonte} · ${fmtInt(N)} itens de pedido · gerado em ${D.meta.gerado_em}. Código do pipeline e deste painel: `),
+    el("a", { href: "https://github.com/WalewskaBarros/DWAdventureWorks", text: "github.com/WalewskaBarros/DWAdventureWorks" }),
+    document.createTextNode(". Desafio de Certificação Analytics Engineer · Indicium Academy."));
+})();
+</script>
+</body>
+</html>
